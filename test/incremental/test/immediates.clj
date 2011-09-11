@@ -16,3 +16,7 @@
  (is (compiled= -2736 "-2736"))
  (is (compiled= 536870911 "536870911"))
  (is (compiled= -536870912 "-536870912")))
+
+(deftest bools
+  (is (compiled= true "#t"))
+  (is (compiled= false "#f")))

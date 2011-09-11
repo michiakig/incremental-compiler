@@ -14,17 +14,34 @@
            (str fmt \newline)) rest))
 
 (def fixnum-shift 2)
+(def word-size 4) ; bytes
+(def fixnum-bits (- (* word-size 8) fixnum-shift))
+(def fixnum-lower (- (Math/pow 2 (- fixnum-bits 1))))
+(def fixnum-upper (- (Math/pow 2 (- fixnum-bits 1)) 1))
+(defn fixnum? [x]
+  (and (integer? x) (<= fixnum-lower x fixnum-upper)))
+
+(def bool_false 0x2f)
+(def bool_true 0x6f)
+(defn boolean? [x] (= (class x) java.lang.Boolean))
+
+(defn immediate? [x]
+  (or (fixnum? x) (boolean? x)
+      ; ...
+      ))
 
 (defn immediate-rep
   [x]
   (cond (integer? x) (bit-shift-left x fixnum-shift)
+        (boolean? x) (if x bool_true bool_false)
         ; ...
         ))
 
 (defn compile-program
   "compile source program x and emit assembly for it"
   [x]
-  (when-not (integer? x) (throw (IllegalArgumentException.)))
+  (when-not (immediate? x) (throw (IllegalArgumentException.
+                                   "only supports constants")))
   (emit "    .text")
   (emit "    .globl scheme_entry")
   (emit "    .type scheme_entry, @function")
