@@ -13,6 +13,14 @@
            fmt
            (str fmt \newline)) rest))
 
+(def fixnum-shift 2)
+
+(defn immediate-rep
+  [x]
+  (cond (integer? x) (bit-shift-left x fixnum-shift)
+        ; ...
+        ))
+
 (defn compile-program
   "compile source program x and emit assembly for it"
   [x]
@@ -21,7 +29,7 @@
   (emit "    .globl scheme_entry")
   (emit "    .type scheme_entry, @function")
   (emit "scheme_entry:")
-  (emit "    movl $~a, %eax" x)
+  (emit "    movl $~a, %eax" (immediate-rep x))
   (emit "    ret"))
 
 (defn compile-and-run
