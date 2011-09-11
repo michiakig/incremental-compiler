@@ -25,8 +25,11 @@
 (def bool_true 0x6f)
 (defn boolean? [x] (= (class x) java.lang.Boolean))
 
+(def empty-list 0x3f)
+(defn empty-list? [x] (and (list? x) (empty? x)))
+
 (defn immediate? [x]
-  (or (fixnum? x) (boolean? x)
+  (or (fixnum? x) (boolean? x) (empty-list? x)
       ; ...
       ))
 
@@ -34,6 +37,7 @@
   [x]
   (cond (integer? x) (bit-shift-left x fixnum-shift)
         (boolean? x) (if x bool_true bool_false)
+        (empty-list? x) empty-list
         ; ...
         ))
 

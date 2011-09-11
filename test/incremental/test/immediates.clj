@@ -1,5 +1,5 @@
 (ns incremental.test.immediates
-  (:use [incremental.compiler])
+  (:use [incremental.compiler :only [compile-and-run]])
   (:use [clojure.test]))
 
 (defmacro compiled= [program result]
@@ -17,6 +17,9 @@
  (is (compiled= 536870911 "536870911"))
  (is (compiled= -536870912 "-536870912")))
 
-(deftest bools
+(deftest booleans
   (is (compiled= true "#t"))
   (is (compiled= false "#f")))
+
+(deftest empty-list
+  (is (compiled= '() "()")))

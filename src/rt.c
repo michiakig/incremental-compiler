@@ -4,14 +4,18 @@
 #define fixnum_shift 2
 #define bool_false 0x2f
 #define bool_true 0x6f
+#define empty_list 0x3f
 int main(int argc, char **argv) {
   int val = scheme_entry();
   if((val & fixnum_mask) == fixnum_tag) {
-    printf("%d\n", val >> fixnum_shift);
+    printf("%d", val >> fixnum_shift);
   } else if(val == bool_false) {
-    printf("#f\n");
+    printf("#f");
   } else if(val == bool_true) {
-    printf("#t\n");
-  } // else if (val == empty_list) {
+    printf("#t");
+  } else if (val == empty_list) {
+    printf("()");    
+  }
+  printf("\n");
   return 0;
 }
