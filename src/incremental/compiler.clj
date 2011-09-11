@@ -28,8 +28,11 @@
 (def empty-list 0x3f)
 (defn empty-list? [x] (and (list? x) (empty? x)))
 
+(def char-shift 8)
+(def char-mask 0x0f)
+
 (defn immediate? [x]
-  (or (fixnum? x) (boolean? x) (empty-list? x)
+  (or (fixnum? x) (boolean? x) (empty-list? x) (char? x)
       ; ...
       ))
 
@@ -38,6 +41,8 @@
   (cond (integer? x) (bit-shift-left x fixnum-shift)
         (boolean? x) (if x bool_true bool_false)
         (empty-list? x) empty-list
+        (char? x) (bit-or (bit-shift-left (int x) char-shift)
+                          char-mask)
         ; ...
         ))
 
