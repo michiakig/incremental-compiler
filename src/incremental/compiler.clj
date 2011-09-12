@@ -46,22 +46,62 @@
         ; ...
         ))
 
-(defn compile-program
-  "compile source program x and emit assembly for it"
+;; original Scheme code uses putprop/getprop and the property list on
+;; symbols, instead in Clojure we use an explicit map
+(def primitives (atom {}))
+(defmacro defprimitive
+  "adds the named primitive to the map of primitives, including a
+  function for emitting the code for the primitive"
+  [[name & args] & body]
+  `(dosync
+    (swap! primitives assoc
+           '~name
+           {:is-prim true
+            :arg-count ~(count args)
+            :emitter (fn ~(vec args)
+                       ~@body)})))
+(defn primitive? [x]
+  (and (symbol? x) (not (nil? (@primitives x)))))
+(defn primitive-emitter
+  "look up the function for emitting this primitive's code"
   [x]
-  (when-not (immediate? x) (throw (IllegalArgumentException.
-                                   "only supports constants")))
+  (:emitter (@primitives x)))
+(defn primcall? [expr]
+  (and (list? expr) (not (empty? expr)) (primitive? (first expr))))
+(defn emit-primcall [expr]
+  (let [prim (first expr)
+        args (rest expr)]
+    ;; (check-primcall-args prim args)
+    (apply (primitive-emitter prim) args)))
+
+(defn emit-immediate [x]
+  (emit "    movl $~a, %eax" (immediate-rep x)))
+
+(defn emit-expr [expr]
+  (cond (immediate? expr) (emit-immediate expr)
+        (primcall? expr) (emit-primcall expr)
+        :else (throw (IllegalArgumentException.
+                      (str "unsupported expression: "expr)))))
+
+(defprimitive (fxadd1 arg)
+  (emit-expr arg)
+  (emit "    addl $~s, %eax" (immediate-rep 1)))
+
+(defn compile-program
+  "compile source program x by emitting boilerplate code and calling
+  emit-expr"
+  [x]
   (emit "    .text")
   (emit "    .globl scheme_entry")
   (emit "    .type scheme_entry, @function")
   (emit "scheme_entry:")
-  (emit "    movl $~a, %eax" (immediate-rep x))
+  (emit-expr x)
   (emit "    ret"))
 
 (defn compile-and-run
   "compile the program x, assemble it with gcc along with the C
-  runtime, run it, cleanup generated filed, and return the first line
-  of the output, "
+  runtime, run it, cleanup (delete) generated files, and return the
+  first line of the output"
   [x]
   (binding [*out* (writer (output-stream (file "out.s")))]
     (compile-program x)
