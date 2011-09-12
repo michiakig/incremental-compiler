@@ -3,7 +3,7 @@
   (:use [clojure.test]))
 
 (defmacro compiled= [program result]
-  `(= (compile-and-run ~program) ~result))
+  `(= (compile-and-run '~program) ~result))
 
 (deftest integers
  (is (compiled= 42 "42"))
@@ -22,7 +22,7 @@
   (is (compiled= false "#f")))
 
 (deftest empty-list
-  (is (compiled= '() "()")))
+  (is (compiled= () "()")))
 
 (deftest chars-short
   (is (compiled= \space " "))
