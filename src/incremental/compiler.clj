@@ -86,6 +86,9 @@
 (defprimitive (fxadd1 arg)
   (emit-expr arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
+(defprimitive (char->fixnum arg)
+  (emit-expr arg)
+  (emit "    shrl $~a, %eax" (- char-shift fixnum-shift)))
 
 (defn compile-program
   "compile source program x by emitting boilerplate code and calling

@@ -3,4 +3,5 @@
   (:use [clojure.test]))
 
 (deftest unary-primitives
-  (is (compiled= (fxadd1 1) "2")))
+  (is (compiled= (fxadd1 1) "2"))
+  (is (compiled= (char->fixnum \a) "97")))
