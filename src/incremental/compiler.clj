@@ -89,6 +89,10 @@
 (defprimitive (char->fixnum arg)
   (emit-expr arg)
   (emit "    shrl $~a, %eax" (- char-shift fixnum-shift)))
+(defprimitive (fixnum->char arg)
+  (emit-expr arg)
+  (emit "    shll $~a, %eax" (- char-shift fixnum-shift))
+  (emit "    orl $~a, %eax" char-tag))
 
 (defn compile-program
   "compile source program x by emitting boilerplate code and calling
