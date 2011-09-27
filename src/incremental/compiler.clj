@@ -14,6 +14,8 @@
            (str fmt \newline)) rest))
 
 (def fixnum-shift 2)
+(def fixnum-mask 3)
+(def fixnum-tag 0)
 (def word-size 4) ; bytes
 (def fixnum-bits (- (* word-size 8) fixnum-shift))
 (def fixnum-lower (- (Math/pow 2 (- fixnum-bits 1))))
@@ -23,6 +25,7 @@
 
 (def bool_false 0x2f)
 (def bool_true 0x6f)
+(def bool-bit 6)
 (defn boolean? [x] (= (class x) java.lang.Boolean))
 
 (def empty-list 0x3f)
@@ -30,6 +33,7 @@
 
 (def char-shift 8)
 (def char-tag 0x0f)
+(def char-mask 0xff)
 
 (defn immediate? [x]
   (or (fixnum? x) (boolean? x) (empty-list? x) (char? x)
@@ -86,6 +90,9 @@
 (defprimitive (fxadd1 arg)
   (emit-expr arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
+(defprimitive (fxsub1 arg)
+  (emit-expr arg)
+  (emit "    subl $~s, %eax" (immediate-rep 1)))
 (defprimitive (char->fixnum arg)
   (emit-expr arg)
   (emit "    shrl $~a, %eax" (- char-shift fixnum-shift)))
@@ -93,6 +100,30 @@
   (emit-expr arg)
   (emit "    shll $~a, %eax" (- char-shift fixnum-shift))
   (emit "    orl $~a, %eax" char-tag))
+
+(defn emit-predicate-suffix []
+  (emit "    sete %al")
+  (emit "    movzbl %al, %eax")
+  (emit "    sal $~s, %al" bool-bit)
+  (emit "    or $~s, %al" bool_false))
+
+(defmacro deftypep
+  "defines a type predicate primitive"
+  [name mask tag]
+  `(defprimitive [~name arg#]
+     (emit-expr arg#)
+     (emit "    and $~s, %al" ~mask)
+     (emit "    cmp $~s, %al" ~tag)
+     (emit-predicate-suffix)))
+
+(deftypep fixnum? fixnum-mask fixnum-tag)
+(deftypep char? char-mask char-tag)
+
+(defprimitive (fxzero? arg)
+  (emit-expr arg)
+  (emit "    shrl $~a, %eax" fixnum-shift) ; eax hold value of arg
+  (emit "    cmp $~s, %eax" 0) ; compare eax to 0
+  (emit-predicate-suffix))
 
 (defn compile-program
   "compile source program x by emitting boilerplate code and calling
