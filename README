@@ -1,0 +1,4 @@
+This is a Lisp compiler from the oft-recommended "An Incremental
+Approach to Compiler Construction." It emits x86 assembly that can be
+assembled with gas on 32-bit GNU/Linux; see the compile-and-run
+function for details. 
