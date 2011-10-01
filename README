@@ -1,4 +1,10 @@
-This is a Lisp compiler from the oft-recommended "An Incremental
-Approach to Compiler Construction." It emits x86 assembly that can be
-assembled with gas on 32-bit GNU/Linux; see the compile-and-run
-function for details. 
+This is the Lisp compiler from the oft-recommended "An Incremental
+Approach to Compiler Construction". In some cases, the code closer
+resembles the sister document "Compilers: Backend to Frontend and Back
+to Front Again".
+
+It emits x86 assembly that can be assembled with gcc on 32-bit
+GNU/Linux; see the `compile-and-run` function for details. I used
+Vagrant for easy access to a 32-bit Ubuntu box since the output of
+`gcc -S` on Snow Leopard was pretty complicated compared to what the
+paper starts with.
