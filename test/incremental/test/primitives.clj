@@ -13,3 +13,6 @@
   (is (compiled= (fxzero? 1) "#f"))
   (is (compiled= (char? \a) "#t"))
   (is (compiled= (char? 0) "#f")))
+
+(deftest binary-primitives
+  (is (compiled= (fx+ 1 2) "3")))

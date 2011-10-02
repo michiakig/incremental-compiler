@@ -72,32 +72,32 @@
   (:emitter (@primitives x)))
 (defn primcall? [expr]
   (and (list? expr) (not (empty? expr)) (primitive? (first expr))))
-(defn emit-primcall [expr]
+(defn emit-primcall [si expr]
   (let [prim (first expr)
         args (rest expr)]
     ;; (check-primcall-args prim args)
-    (apply (primitive-emitter prim) args)))
+    (apply (primitive-emitter prim) si args)))
 
-(defn emit-immediate [x]
+(defn emit-immediate [si x]
   (emit "    movl $~a, %eax" (immediate-rep x)))
 
-(defn emit-expr [expr]
-  (cond (immediate? expr) (emit-immediate expr)
-        (primcall? expr) (emit-primcall expr)
+(defn emit-expr [si expr]
+  (cond (immediate? expr) (emit-immediate si expr)
+        (primcall? expr) (emit-primcall si expr)
         :else (throw (IllegalArgumentException.
                       (str "unsupported expression: "expr)))))
 
-(defprimitive (fxadd1 arg)
-  (emit-expr arg)
+(defprimitive (fxadd1 si arg)
+  (emit-expr si arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
-(defprimitive (fxsub1 arg)
-  (emit-expr arg)
+(defprimitive (fxsub1 si arg)
+  (emit-expr si arg)
   (emit "    subl $~s, %eax" (immediate-rep 1)))
-(defprimitive (char->fixnum arg)
-  (emit-expr arg)
+(defprimitive (char->fixnum si arg)
+  (emit-expr si arg)
   (emit "    shrl $~a, %eax" (- char-shift fixnum-shift)))
-(defprimitive (fixnum->char arg)
-  (emit-expr arg)
+(defprimitive (fixnum->char si arg)
+  (emit-expr si arg)
   (emit "    shll $~a, %eax" (- char-shift fixnum-shift))
   (emit "    orl $~a, %eax" char-tag))
 
@@ -110,8 +110,8 @@
 (defmacro deftypep
   "defines a type predicate primitive"
   [name mask tag]
-  `(defprimitive [~name arg#]
-     (emit-expr arg#)
+  `(defprimitive [~name si# arg#]
+     (emit-expr si# arg#)
      (emit "    and $~s, %al" ~mask)
      (emit "    cmp $~s, %al" ~tag)
      (emit-predicate-suffix)))
@@ -119,21 +119,36 @@
 (deftypep fixnum? fixnum-mask fixnum-tag)
 (deftypep char? char-mask char-tag)
 
-(defprimitive (fxzero? arg)
-  (emit-expr arg)
+(defprimitive (fxzero? si arg)
+  (emit-expr si arg)
   (emit "    shrl $~a, %eax" fixnum-shift) ; eax hold value of arg
   (emit "    cmp $~s, %eax" 0) ; compare eax to 0
   (emit-predicate-suffix))
+
+(defprimitive (fx+ si arg1 arg2)
+  (emit-expr si arg1)
+  (emit "    movl %eax, ~a(%esp)" si)
+  (emit-expr (- si word-size) arg2)
+  (emit "    addl ~a(%esp), %eax" si))
+
+(defn emit-function-header [name]
+  (emit "    .text")
+  (emit "    .globl ~a" name)
+  (emit "    .type ~a, @function" name)
+  (emit "~a:" name))
 
 (defn compile-program
   "compile source program x by emitting boilerplate code and calling
   emit-expr"
   [x]
-  (emit "    .text")
-  (emit "    .globl scheme_entry")
-  (emit "    .type scheme_entry, @function")
-  (emit "scheme_entry:")
-  (emit-expr x)
+  (emit-function-header "L_scheme_entry")
+  (emit-expr (- word-size) x)
+  (emit "    ret")
+  (emit-function-header "scheme_entry")
+  (emit "    movl %esp, %ecx")
+  (emit "    movl 4(%esp), %esp")
+  (emit "    call L_scheme_entry")
+  (emit "    movl %ecx, %esp")
   (emit "    ret"))
 
 (defn compile-and-run
@@ -149,4 +164,3 @@
     (shell "rm out.s a.out")
     (first result)))
 
-;; (println (compile-and-run 42))
