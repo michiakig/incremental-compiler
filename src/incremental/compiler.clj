@@ -131,6 +131,13 @@
   (emit-expr (- si word-size) arg2)
   (emit "    addl ~a(%esp), %eax" si))
 
+(defprimitive (fx- si arg1 arg2)
+  (emit-expr si arg2)
+  (emit "    movl %eax, ~a(%esp)" si)
+  (emit-expr (- si word-size) arg1)
+  (emit "    subl ~a(%esp), %eax" si)) ; subtract arg2 from arg1,
+                                       ; leave result in eax
+
 (defn emit-function-header [name]
   (emit "    .text")
   (emit "    .globl ~a" name)

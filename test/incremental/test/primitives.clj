@@ -15,4 +15,6 @@
   (is (compiled= (char? 0) "#f")))
 
 (deftest binary-primitives
-  (is (compiled= (fx+ 1 2) "3")))
+  (is (compiled= (fx+ 1 2) "3"))
+  (is (compiled= (fx- 2 1) "1"))
+  (is (compiled= (fx+ (fx- (fx- 30 3) 3) (fx- 6 5)) "25")))
