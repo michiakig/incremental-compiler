@@ -36,11 +36,12 @@
 (def char-mask 0xff)
 
 (defn immediate? [x]
-  (or (fixnum? x) (boolean? x) (empty-list? x) (char? x)
-      ; ...
-      ))
+  (or (fixnum? x) (boolean? x) (empty-list? x) (char? x)))
 
 (defn immediate-rep
+  "return the immediate representation of the value x. The value x is
+  in our language being compiled, and the returned result is in the
+  compilation target language"
   [x]
   (cond (integer? x) (bit-shift-left x fixnum-shift)
         (boolean? x) (if x bool_true bool_false)
@@ -51,7 +52,7 @@
         ))
 
 ;; original Scheme code uses putprop/getprop and the property list on
-;; symbols, instead in Clojure we use an explicit map
+;; symbols, instead in Clojure we use an explicit map (in an atom)
 (def primitives (atom {}))
 (defmacro defprimitive
   "adds the named primitive to the map of primitives, including a
@@ -72,6 +73,7 @@
   (:emitter (@primitives x)))
 (defn primcall? [expr]
   (and (list? expr) (not (empty? expr)) (primitive? (first expr))))
+
 (defn emit-primcall [si expr]
   (let [prim (first expr)
         args (rest expr)]
@@ -87,6 +89,7 @@
         :else (throw (IllegalArgumentException.
                       (str "unsupported expression: "expr)))))
 
+;; some primitives
 (defprimitive (fxadd1 si arg)
   (emit-expr si arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
@@ -137,7 +140,6 @@
   (emit-expr (- si word-size) arg1)
   (emit "    subl ~a(%esp), %eax" si)) ; subtract arg2 from arg1,
                                        ; leave result in eax
-
 (defn emit-function-header [name]
   (emit "    .text")
   (emit "    .globl ~a" name)
