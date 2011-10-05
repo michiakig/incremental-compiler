@@ -104,8 +104,8 @@
   (emit "    shll $~a, %eax" (- char-shift fixnum-shift))
   (emit "    orl $~a, %eax" char-tag))
 
-(defn emit-predicate-suffix []
-  (emit "    sete %al")
+(defn emit-predicate-suffix [set-inst]
+  (emit "    ~a %al" set-inst)
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" bool-bit)
   (emit "    or $~s, %al" bool_false))
@@ -117,7 +117,7 @@
      (emit-expr si# arg#)
      (emit "    and $~s, %al" ~mask)
      (emit "    cmp $~s, %al" ~tag)
-     (emit-predicate-suffix)))
+     (emit-predicate-suffix "sete")))
 
 (deftypep fixnum? fixnum-mask fixnum-tag)
 (deftypep char? char-mask char-tag)
@@ -126,7 +126,7 @@
   (emit-expr si arg)
   (emit "    shrl $~a, %eax" fixnum-shift) ; eax hold value of arg
   (emit "    cmp $~s, %eax" 0) ; compare eax to 0
-  (emit-predicate-suffix))
+  (emit-predicate-suffix "sete"))
 
 (defprimitive (fx+ si arg1 arg2)
   (emit-expr si arg1)
@@ -139,7 +139,22 @@
   (emit "    movl %eax, ~a(%esp)" si)
   (emit-expr (- si word-size) arg1)
   (emit "    subl ~a(%esp), %eax" si)) ; subtract arg2 from arg1,
-                                       ; leave result in eax
+                                        ; leave result in eax
+
+(defprimitive (fx= si arg1 arg2)
+  (emit-expr si arg1)
+  (emit "    movl %eax, ~a(%esp)" si)
+  (emit-expr (- si word-size) arg2)
+  (emit "    cmp ~a(%esp), %eax" si)
+  (emit-predicate-suffix "sete"))
+
+(defprimitive (fx< si arg1 arg2)
+  (emit-expr si arg1)
+  (emit "    movl %eax, ~a(%esp)" si)
+  (emit-expr (- si word-size) arg2)
+  (emit "    cmp %eax, ~a(%esp)" si)
+  (emit-predicate-suffix "setl"))
+
 (defn emit-function-header [name]
   (emit "    .text")
   (emit "    .globl ~a" name)
