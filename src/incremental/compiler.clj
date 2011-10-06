@@ -83,11 +83,39 @@
 (defn emit-immediate [si x]
   (emit "    movl $~a, %eax" (immediate-rep x)))
 
+;; conditional (if) is the first non-primitive
+(declare emit-expr)
+
+(def unique-label
+  (let [count (atom 0)]
+    (fn []
+      (let [L (str "L_" @count)]
+        (dosync (swap! count inc))
+        L))))
+
+(defn if? [expr] (= (first expr) 'if))
+(defn if-test [expr] (nth expr 1))
+(defn if-conseq [expr] (nth expr 2))
+(defn if-altern [expr] (nth expr 3))
+
+(defn emit-if [si expr]
+  (let [alt-label (unique-label)
+        end-label (unique-label)]
+    (emit-expr si (if-test expr))
+    (emit "    cmp $~a, %al" bool_false)
+    (emit "    je ~a" alt-label)
+    (emit-expr si (if-conseq expr))
+    (emit "    jmp ~a" end-label)
+    (emit "~a:" alt-label)
+    (emit-expr si (if-altern expr))
+    (emit "~a:" end-label)))
+
 (defn emit-expr [si expr]
   (cond (immediate? expr) (emit-immediate si expr)
         (primcall? expr) (emit-primcall si expr)
+        (if? expr) (emit-if si expr)
         :else (throw (IllegalArgumentException.
-                      (str "unsupported expression: "expr)))))
+                      (str "unsupported expression: " expr)))))
 
 ;; some primitives
 (defprimitive (fxadd1 si arg)
