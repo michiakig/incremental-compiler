@@ -74,13 +74,13 @@
 (defn primcall? [expr]
   (and (list? expr) (not (empty? expr)) (primitive? (first expr))))
 
-(defn emit-primcall [si expr]
+(defn emit-primcall [si env expr]
   (let [prim (first expr)
         args (rest expr)]
     ;; (check-primcall-args prim args)
-    (apply (primitive-emitter prim) si args)))
+    (apply (primitive-emitter prim) si env args)))
 
-(defn emit-immediate [si x]
+(defn emit-immediate [x]
   (emit "    movl $~a, %eax" (immediate-rep x)))
 
 ;; conditional (if) is the first non-primitive
@@ -98,37 +98,74 @@
 (defn if-conseq [expr] (nth expr 2))
 (defn if-altern [expr] (nth expr 3))
 
-(defn emit-if [si expr]
+(defn emit-if [si env expr]
   (let [alt-label (unique-label)
         end-label (unique-label)]
-    (emit-expr si (if-test expr))
+    (emit-expr si env (if-test expr))
     (emit "    cmp $~a, %al" bool_false)
     (emit "    je ~a" alt-label)
-    (emit-expr si (if-conseq expr))
+    (emit-expr si env (if-conseq expr))
     (emit "    jmp ~a" end-label)
     (emit "~a:" alt-label)
-    (emit-expr si (if-altern expr))
+    (emit-expr si env (if-altern expr))
     (emit "~a:" end-label)))
 
-(defn emit-expr [si expr]
-  (cond (immediate? expr) (emit-immediate si expr)
-        (primcall? expr) (emit-primcall si expr)
-        (if? expr) (emit-if si expr)
+(defn emit-stack-load [si]
+  (emit "    movl ~a(%esp), %eax" si))
+(defn emit-stack-save [si]
+  (emit "    movl %eax, ~a(%esp)" si))
+
+(def extend-env assoc)
+(defn lookup [v env] (env v))
+
+(def variable? symbol?)
+(defn emit-variable-ref [env expr]
+  (let [si (lookup expr env)]
+    (if si
+      (emit-stack-load si)
+      (throw (Exception. (str "Reference to unknown variable " expr))))))
+
+(defn let? [expr] (= (first expr) 'let))
+(def let-bindings second)
+(defn let-body [expr] (nth expr 2))
+(def rhs second)
+(def lhs first)
+
+(defn next-stack-index [si] (- si word-size))
+
+(defn emit-let [si env expr]
+  (loop [bindings (let-bindings expr)
+         si si new-env env]
+    (cond (empty? bindings) (emit-expr si new-env (let-body expr))
+          :else
+          (let [b (first bindings)]
+            (emit-expr si env (rhs b))
+            (emit-stack-save si)
+            (recur (rest bindings)
+                   (next-stack-index si)
+                   (extend-env new-env (lhs b) si))))))
+
+(defn emit-expr [si env expr]
+  (cond (immediate? expr) (emit-immediate expr)
+        (variable? expr) (emit-variable-ref env expr)
+        (primcall? expr) (emit-primcall si env expr)
+        (if? expr) (emit-if si env expr)
+        (let? expr) (emit-let si env expr)
         :else (throw (IllegalArgumentException.
                       (str "unsupported expression: " expr)))))
 
 ;; some primitives
-(defprimitive (fxadd1 si arg)
-  (emit-expr si arg)
+(defprimitive (fxadd1 si env arg)
+  (emit-expr si env arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
-(defprimitive (fxsub1 si arg)
-  (emit-expr si arg)
+(defprimitive (fxsub1 si env arg)
+  (emit-expr si env arg)
   (emit "    subl $~s, %eax" (immediate-rep 1)))
-(defprimitive (char->fixnum si arg)
-  (emit-expr si arg)
+(defprimitive (char->fixnum si env arg)
+  (emit-expr si env arg)
   (emit "    shrl $~a, %eax" (- char-shift fixnum-shift)))
-(defprimitive (fixnum->char si arg)
-  (emit-expr si arg)
+(defprimitive (fixnum->char si env arg)
+  (emit-expr si env arg)
   (emit "    shll $~a, %eax" (- char-shift fixnum-shift))
   (emit "    orl $~a, %eax" char-tag))
 
@@ -141,8 +178,8 @@
 (defmacro deftypep
   "defines a type predicate primitive"
   [name mask tag]
-  `(defprimitive [~name si# arg#]
-     (emit-expr si# arg#)
+  `(defprimitive [~name si# env# arg#]
+     (emit-expr si# env# arg#)
      (emit "    and $~s, %al" ~mask)
      (emit "    cmp $~s, %al" ~tag)
      (emit-predicate-suffix "sete")))
@@ -150,36 +187,36 @@
 (deftypep fixnum? fixnum-mask fixnum-tag)
 (deftypep char? char-mask char-tag)
 
-(defprimitive (fxzero? si arg)
-  (emit-expr si arg)
+(defprimitive (fxzero? si env arg)
+  (emit-expr si env arg)
   (emit "    shrl $~a, %eax" fixnum-shift) ; eax hold value of arg
   (emit "    cmp $~s, %eax" 0) ; compare eax to 0
   (emit-predicate-suffix "sete"))
 
-(defprimitive (fx+ si arg1 arg2)
-  (emit-expr si arg1)
+(defprimitive (fx+ si env arg1 arg2)
+  (emit-expr si env arg1)
   (emit "    movl %eax, ~a(%esp)" si)
-  (emit-expr (- si word-size) arg2)
+  (emit-expr (- si word-size) env arg2)
   (emit "    addl ~a(%esp), %eax" si))
 
-(defprimitive (fx- si arg1 arg2)
-  (emit-expr si arg2)
+(defprimitive (fx- si env arg1 arg2)
+  (emit-expr si env arg2)
   (emit "    movl %eax, ~a(%esp)" si)
-  (emit-expr (- si word-size) arg1)
+  (emit-expr (- si word-size) env arg1)
   (emit "    subl ~a(%esp), %eax" si)) ; subtract arg2 from arg1,
                                         ; leave result in eax
 
-(defprimitive (fx= si arg1 arg2)
-  (emit-expr si arg1)
+(defprimitive (fx= si env arg1 arg2)
+  (emit-expr si env arg1)
   (emit "    movl %eax, ~a(%esp)" si)
-  (emit-expr (- si word-size) arg2)
+  (emit-expr (- si word-size) env arg2)
   (emit "    cmp ~a(%esp), %eax" si)
   (emit-predicate-suffix "sete"))
 
-(defprimitive (fx< si arg1 arg2)
-  (emit-expr si arg1)
+(defprimitive (fx< si env arg1 arg2)
+  (emit-expr si env arg1)
   (emit "    movl %eax, ~a(%esp)" si)
-  (emit-expr (- si word-size) arg2)
+  (emit-expr (- si word-size) env arg2)
   (emit "    cmp %eax, ~a(%esp)" si)
   (emit-predicate-suffix "setl"))
 
@@ -194,7 +231,7 @@
   emit-expr"
   [x]
   (emit-function-header "L_scheme_entry")
-  (emit-expr (- word-size) x)
+  (emit-expr (- word-size) {} x)
   (emit "    ret")
   (emit-function-header "scheme_entry")
   (emit "    movl %esp, %ecx")
