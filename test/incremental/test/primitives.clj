@@ -26,5 +26,5 @@
   (is (compiled= (fx< 1 0) "#f"))
   (is (compiled= (fx< 1 2) "#t"))
   (is (compiled= (fx< 2 1) "#f"))
-  (is (compiled= (fx< 10000 1) "#t"))
+  (is (compiled= (fx< 1 10000) "#t"))
   )
