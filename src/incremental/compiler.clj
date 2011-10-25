@@ -88,10 +88,13 @@
 
 (def unique-label
   (let [count (atom 0)]
-    (fn []
-      (let [L (str "L_" @count)]
-        (dosync (swap! count inc))
-        L))))
+    (fn
+      ([]
+         (dosync (swap! count inc))
+         (str "L_" @count))
+      ([name]
+         (dosync (swap! count inc))
+         (str "L_" name "_" @count)))))
 
 (defn if? [expr] (= (first expr) 'if))
 (defn if-test [expr] (nth expr 1))
