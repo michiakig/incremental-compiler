@@ -148,12 +148,68 @@
                    (next-stack-index si)
                    (extend-env new-env (lhs b) si))))))
 
+(defn letrec? [expr] (and (seq? expr) (= (first expr) 'letrec)))
+(def letrec-bindings second)
+(defn letrec-body [expr] (first (rest (rest expr))))
+
+(def lambda-formals second)
+(defn lambda-body [expr] (first (rest (rest expr))))
+
+(declare emit-function-header)
+(defn emit-lambda [env expr label]
+  (emit-function-header label)
+  (let [fmls (lambda-formals expr)
+        body (lambda-body expr)]
+    (loop [fmls fmls
+           si (- word-size)
+           env env]
+      (cond
+       (empty? fmls) (do (emit-expr si env body)
+                         (emit "    ret"))
+       :else (recur (rest fmls)
+                    (- si word-size)
+                    (extend-env env (first fmls) si))))))
+(declare emit-scheme-entry)
+(defn emit-letrec [expr]
+  (let [bindings (letrec-bindings expr)
+        lvars (map lhs bindings)
+        lambdas (map rhs bindings)
+        labels (map unique-label lvars)
+        env (zipmap lvars labels)]
+    (doseq [[lambda label] (map vector lambdas labels)]
+      (emit-lambda env lambda label))
+    (emit-scheme-entry (letrec-body expr) env)))
+
+(defn emit-adjust-base [n]
+  (cond (< n 0) (emit "    subl $~a, %esp" (- n))
+        (> n 0) (emit "    addl $~a, %esp" n)))
+
+(defn emit-call [si label]
+  (emit "    call ~a" label))
+
+(defn call? [expr] (= (first expr) 'app))
+(def call-target second)
+(defn call-args [expr] (rest (rest expr)))
+
+(defn emit-app [si env expr]
+  (loop [si (- si word-size)
+         args (call-args expr)]
+    (when-not (empty? args)
+      (emit-expr si env (first args))
+      (emit "    movl %eax, ~a(%esp)" si)
+      (recur (- si word-size)
+             (rest args))))
+  (emit-adjust-base (+ si word-size))
+  (emit-call si (lookup (call-target expr) env))
+  (emit-adjust-base (- (+ si word-size))))
+
 (defn emit-expr [si env expr]
   (cond (immediate? expr) (emit-immediate expr)
         (variable? expr) (emit-variable-ref env expr)
         (primcall? expr) (emit-primcall si env expr)
         (if? expr) (emit-if si env expr)
         (let? expr) (emit-let si env expr)
+        (call? expr) (emit-app si env expr)
         :else (throw (IllegalArgumentException.
                       (str "unsupported expression: " expr)))))
 
@@ -229,12 +285,9 @@
   (emit "    .type ~a, @function" name)
   (emit "~a:" name))
 
-(defn compile-program
-  "compile source program x by emitting boilerplate code and calling
-  emit-expr"
-  [x]
+(defn emit-scheme-entry [expr env]
   (emit-function-header "L_scheme_entry")
-  (emit-expr (- word-size) {} x)
+  (emit-expr (- word-size) env expr)
   (emit "    ret")
   (emit-function-header "scheme_entry")
   (emit "    movl %esp, %ecx")
@@ -242,6 +295,14 @@
   (emit "    call L_scheme_entry")
   (emit "    movl %ecx, %esp")
   (emit "    ret"))
+
+(defn compile-program
+  "compile source program x by calling emit-scheme-entry or
+  emit-letrc"
+  [x]
+  (if (letrec? x)
+    (emit-letrec x)
+    (emit-scheme-entry x {})))
 
 (defn compile-and-run
   "compile the program x, assemble it with gcc along with the C
