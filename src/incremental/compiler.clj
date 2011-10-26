@@ -35,6 +35,9 @@
 (def char-tag 0x0f)
 (def char-mask 0xff)
 
+(def heap-mask 0x7)
+(def pair-tag 0x1)
+
 (defn immediate? [x]
   (or (fixnum? x) (boolean? x) (empty-list? x) (char? x)))
 
@@ -279,6 +282,23 @@
   (emit "    cmp %eax, ~a(%esp)" si)
   (emit-predicate-suffix "setl"))
 
+;; primitives for heap allocated objects
+(defprimitive (cons si env a d)
+  (emit-expr si env a)
+  (emit "    movl %eax, 0(%ebp)") ; set the car
+  (emit-expr si env d)
+  (emit "    movl %eax, 4(%ebp)") ; set the cdr
+  (emit "    movl %ebp, %eax") ; eax = ebp | 1
+  (emit "    orl $1, %eax")
+  (emit "    addl $8, %ebp")) ; inc heap ptr
+(defprimitive (car si env o)
+  (emit-expr si env o)
+  (emit "    subl $1 ,%eax")
+  (emit "    movl (%eax), %eax"))
+(defprimitive (cdr si env o)
+  (emit-expr si env o)
+  (emit "    movl 3(%eax), %eax"))
+
 (defn emit-function-header [name]
   (emit "    .text")
   (emit "    .globl ~a" name)
@@ -290,10 +310,21 @@
   (emit-expr (- word-size) env expr)
   (emit "    ret")
   (emit-function-header "scheme_entry")
-  (emit "    movl %esp, %ecx")
-  (emit "    movl 4(%esp), %esp")
+  ;; save and restore the contect around L_scheme_entry
+  (emit "    movl 4(%esp), %ecx")
+  (emit "    movl %ebx, 4(%ecx)")
+  (emit "    movl %esi, 16(%ecx)")
+  (emit "    movl %edi, 20(%ecx)")
+  (emit "    movl %ebp, 24(%ecx)")
+  (emit "    movl %esp, 28(%ecx)")
+  (emit "    movl 12(%esp), %ebp")
+  (emit "    movl 8(%esp), %esp")
   (emit "    call L_scheme_entry")
-  (emit "    movl %ecx, %esp")
+  (emit "    movl 4(%ecx), %ebx")
+  (emit "    movl 16(%ecx), %esi")
+  (emit "    movl 20(%ecx), %edi")
+  (emit "    movl 24(%ecx), %ebp")
+  (emit "    movl 28(%ecx), %esp")
   (emit "    ret"))
 
 (defn compile-program
@@ -316,4 +347,3 @@
   (let [result (shell "./a.out")]
     (shell "rm out.s a.out")
     (first result)))
-
